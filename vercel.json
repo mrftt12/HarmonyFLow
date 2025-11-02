@@ -1,0 +1,21 @@
+{
+  "functions": {
+    "api/blob-list.ts": {
+      "maxDuration": 10
+    },
+    "api/mega-list.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/blob/list",
+      "destination": "/api/blob-list"
+    },
+    {
+      "source": "/api/mega/list",
+      "destination": "/api/mega-list"
+    }
+  ]
+}
+

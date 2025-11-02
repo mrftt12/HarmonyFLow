@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/blob/list.ts": {
+      "maxDuration": 10
+    }
+  }
+}
+

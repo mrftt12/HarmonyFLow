@@ -1,28 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Maximize, Share2, Download, Heart, MessageCircle, MoreVertical } from 'lucide-react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { getVideoFiles, MediaFile } from '../services/blobService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Mock data for video content
-const mockVideo = {
-  id: '1',
-  title: 'Summer Music Festival Highlights',
-  channel: 'MusicEvents',
-  views: '2.4M views',
-  uploadDate: '3 days ago',
-  duration: '12:45',
-  thumbnail: 'https://images.unsplash.com/photo-1636337897543-83b55150608f?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8JTIyQ2luZW1hJTIwbW92aWUlMjBuaWdodCUyMGV4cGVyaWVuY2V8ZW58MHx8MHx8fDA%3D',
-  description: 'Relive the best moments from our summer music festival. Amazing performances by top artists and unforgettable memories.',
-};
-
-// Mock data for related videos
-const relatedVideos = [
-  { id: '2', title: 'Top 10 Concert Performances', channel: 'MusicChannel', views: '1.8M', duration: '15:22', thumbnail: 'https://images.unsplash.com/photo-1558008258-7ff8888b42b0?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8N3x8R2FtaW5nJTIwZXNwb3J0cyUyMGNvbXBldGl0aW9ufGVufDB8fDB8fHww' },
-  { id: '3', title: 'Acoustic Sessions - Live', channel: 'AcousticVibes', views: '956K', duration: '8:45', thumbnail: 'https://images.unsplash.com/photo-1608447718455-ed5006c46051?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8MyUyMGdyYXBoaWNzfGVufDB8fDB8fHww' },
-  { id: '4', title: 'Behind the Scenes - Music Video', channel: 'ArtistsLife', views: '3.2M', duration: '22:10', thumbnail: 'https://images.unsplash.com/photo-1675351085230-ab39b2289ff4?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mjh8fDMlMjBncmFwaGljc3xlbnwwfHwwfHx8MA%3D%3D' },
-  { id: '5', title: 'Music Festival Afterparty', channel: 'NightLife', views: '1.1M', duration: '18:33', thumbnail: 'https://images.unsplash.com/photo-1660142107232-e26dd2036dd8?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTV8fDMlMjBncmFwaGljc3xlbnwwfHwwfHx8MA%3D%3D' },
-];
 
 // Mock comments data
 const comments = [
@@ -32,9 +14,43 @@ const comments = [
 ];
 
 export default function VideoPlayerScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [video, setVideo] = useState<MediaFile | null>(null);
+  const [relatedVideos, setRelatedVideos] = useState<MediaFile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadVideo();
+  }, [id]);
+
+  const loadVideo = async () => {
+    try {
+      setLoading(true);
+      const videoFiles = await getVideoFiles();
+      
+      if (id) {
+        const foundVideo = videoFiles.find(file => file.id === id);
+        if (foundVideo) {
+          setVideo(foundVideo);
+          // Set related videos as other videos except current
+          setRelatedVideos(videoFiles.filter(v => v.id !== id).slice(0, 5));
+        } else if (videoFiles.length > 0) {
+          setVideo(videoFiles[0]);
+          setRelatedVideos(videoFiles.slice(1, 6));
+        }
+      } else if (videoFiles.length > 0) {
+        setVideo(videoFiles[0]);
+        setRelatedVideos(videoFiles.slice(1, 6));
+      }
+    } catch (error) {
+      console.error('Error loading video:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const togglePlay = () => {
     setIsPlaying(!isPlaying);
@@ -48,15 +64,33 @@ export default function VideoPlayerScreen() {
     setIsSaved(!isSaved);
   };
 
+  if (loading || !video) {
+    return (
+      <View className="flex-1 bg-gray-900 items-center justify-center">
+        <ActivityIndicator size="large" color="#FF69B4" />
+        <Text className="text-white mt-4">Loading video...</Text>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-gray-900">
       {/* Video Player Section */}
       <View className="relative">
-        <Image 
-          source={{ uri: mockVideo.thumbnail }} 
-          style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.56 }} 
-          className="rounded-b-3xl"
-        />
+        {video.thumbnail ? (
+          <Image 
+            source={{ uri: video.thumbnail }} 
+            style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.56 }} 
+            className="rounded-b-3xl"
+          />
+        ) : (
+          <View 
+            style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.56 }} 
+            className="rounded-b-3xl bg-gray-700 items-center justify-center"
+          >
+            <Text className="text-white text-4xl">🎬</Text>
+          </View>
+        )}
         
         {/* Video Controls Overlay */}
         <View className="absolute bottom-4 left-0 right-0 flex-row justify-between items-center px-6">
@@ -84,10 +118,12 @@ export default function VideoPlayerScreen() {
 
       {/* Video Info Section */}
       <ScrollView className="flex-1 px-4 py-6">
-        <Text className="text-white text-xl font-bold mb-2">{mockVideo.title}</Text>
+        <Text className="text-white text-xl font-bold mb-2">{video.title}</Text>
         
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-gray-300">{mockVideo.views} • {mockVideo.uploadDate}</Text>
+          {video.duration && (
+            <Text className="text-gray-300">{video.duration}</Text>
+          )}
           <View className="flex-row space-x-4">
             <TouchableOpacity onPress={toggleLike} className="flex-row items-center">
               <Heart size={20} color={isLiked ? "#FF69B4" : "#AAAAAA"} fill={isLiked ? "#FF69B4" : "none"} />
@@ -100,18 +136,24 @@ export default function VideoPlayerScreen() {
           </View>
         </View>
 
-        <View className="flex-row items-center mb-6">
-          <View className="w-10 h-10 rounded-full bg-gray-700 mr-3" />
-          <View className="flex-1">
-            <Text className="text-white font-semibold">{mockVideo.channel}</Text>
-            <Text className="text-gray-400 text-sm">1.2M subscribers</Text>
+        {video.artist && (
+          <View className="flex-row items-center mb-6">
+            <View className="w-10 h-10 rounded-full bg-gray-700 mr-3 items-center justify-center">
+              <Text className="text-white text-xs">📹</Text>
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-semibold">{video.artist}</Text>
+              <Text className="text-gray-400 text-sm">Channel</Text>
+            </View>
+            <TouchableOpacity className="bg-white rounded-full px-4 py-2">
+              <Text className="text-black font-semibold">Subscribe</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity className="bg-white rounded-full px-4 py-2">
-            <Text className="text-black font-semibold">Subscribe</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
-        <Text className="text-gray-300 mb-6">{mockVideo.description}</Text>
+        {video.album && (
+          <Text className="text-gray-300 mb-6">{video.album}</Text>
+        )}
 
         {/* Comments Section */}
         <View className="mb-6">
@@ -155,20 +197,39 @@ export default function VideoPlayerScreen() {
         </View>
 
         {/* Related Videos Section */}
-        <Text className="text-white text-lg font-bold mb-4">Related Videos</Text>
-        {relatedVideos.map((video) => (
-          <TouchableOpacity key={video.id} className="flex-row mb-4">
-            <Image 
-              source={{ uri: video.thumbnail }} 
-              className="w-32 h-20 rounded-lg mr-3" 
-            />
-            <View className="flex-1">
-              <Text className="text-white font-semibold mb-1">{video.title}</Text>
-              <Text className="text-gray-400 text-sm">{video.channel}</Text>
-              <Text className="text-gray-400 text-sm">{video.views} • {video.duration}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {relatedVideos.length > 0 && (
+          <>
+            <Text className="text-white text-lg font-bold mb-4">Related Videos</Text>
+            {relatedVideos.map((relatedVideo) => (
+              <TouchableOpacity 
+                key={relatedVideo.id} 
+                className="flex-row mb-4"
+                onPress={() => router.push(`/video-player?id=${relatedVideo.id}`)}
+              >
+                {relatedVideo.thumbnail ? (
+                  <Image 
+                    source={{ uri: relatedVideo.thumbnail }} 
+                    className="w-32 h-20 rounded-lg mr-3" 
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="w-32 h-20 rounded-lg mr-3 bg-gray-700 items-center justify-center">
+                    <Text className="text-white text-xs">🎬</Text>
+                  </View>
+                )}
+                <View className="flex-1">
+                  <Text className="text-white font-semibold mb-1">{relatedVideo.title}</Text>
+                  {relatedVideo.artist && (
+                    <Text className="text-gray-400 text-sm">{relatedVideo.artist}</Text>
+                  )}
+                  {relatedVideo.duration && (
+                    <Text className="text-gray-400 text-sm">{relatedVideo.duration}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
       </ScrollView>
 
       {/* Player Controls Bar */}

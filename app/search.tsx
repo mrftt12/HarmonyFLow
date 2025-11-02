@@ -1,30 +1,49 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, FlatList, Image, ActivityIndicator } from 'react-native';
 import { Search as SearchIcon, X, Play, Heart, Home, Library, User } from 'lucide-react-native';
 import { router, usePathname } from 'expo-router';
-
-// Mock search results
-const mockSearchResults = [
-  { id: '1', type: 'song', title: 'Electric Dreams', artist: 'Neon Pulse', image: 'https://images.unsplash.com/photo-1487954335942-047e6d1551ee?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Nnx8Q29uY2VydCUyMG11c2ljJTIwcGVyZm9ybWFuY2V8ZW58MHx8MHx8fDA%3D' },
-  { id: '2', type: 'artist', title: 'Stellar Waves', image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTR8fE5pZ2h0JTIwc2t5JTIwY29zbWljJTIwZ2FsYXh5fGVufDB8fDB8fHww' },
-  { id: '3', type: 'playlist', title: 'Chill Vibes', image: 'https://images.unsplash.com/photo-1517340073101-289191978ae8?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MzR8fDMlMjBncmFwaGljc3xlbnwwfHwwfHx8MA%3D%3D' },
-  { id: '4', type: 'song', title: 'Cosmic Journey', artist: 'Stellar Waves', image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTR8fE5pZ2h0JTIwc2t5JTIwY29zbWljJTIwZ2FsYXh5fGVufDB8fDB8fHww' },
-];
-
-const trendingSearches = ['Electric Dreams', 'Neon Pulse', 'Chill Vibes', 'Workout Mix', 'Road Trip'];
+import { searchMediaFiles, getAllMediaFiles, MediaFile } from '../services/blobService';
 
 export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<MediaFile[]>([]);
+  const [allMedia, setAllMedia] = useState<MediaFile[]>([]);
+  const [trendingSearches, setTrendingSearches] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const pathname = usePathname();
 
-  const handleSearch = (query: string) => {
+  useEffect(() => {
+    loadAllMedia();
+  }, []);
+
+  const loadAllMedia = async () => {
+    try {
+      const { audio, video } = await getAllMediaFiles();
+      const all = [...audio, ...video];
+      setAllMedia(all);
+      
+      // Extract trending searches from media titles
+      const uniqueArtists = [...new Set(all.map(m => m.artist).filter(Boolean))];
+      const uniqueTitles = [...new Set(all.slice(0, 10).map(m => m.title))];
+      setTrendingSearches([...uniqueTitles.slice(0, 5), ...uniqueArtists.slice(0, 5)].slice(0, 5));
+    } catch (error) {
+      console.error('Error loading media:', error);
+    }
+  };
+
+  const handleSearch = async (query: string) => {
     setSearchQuery(query);
     if (query.trim().length > 0) {
-      setSearchResults(mockSearchResults.filter(item => 
-        item.title.toLowerCase().includes(query.toLowerCase()) ||
-        (item.artist && item.artist.toLowerCase().includes(query.toLowerCase()))
-      ));
+      setLoading(true);
+      try {
+        const results = await searchMediaFiles(query);
+        setSearchResults(results);
+      } catch (error) {
+        console.error('Error searching:', error);
+        setSearchResults([]);
+      } finally {
+        setLoading(false);
+      }
     } else {
       setSearchResults([]);
     }
@@ -97,19 +116,37 @@ export default function SearchScreen() {
           </>
         ) : (
           <View className="mt-6">
-            {searchResults.length > 0 ? (
+            {loading ? (
+              <View className="items-center justify-center py-12">
+                <ActivityIndicator size="large" color="#FF69B4" />
+                <Text className="text-gray-400 mt-4">Searching...</Text>
+              </View>
+            ) : searchResults.length > 0 ? (
               <>
                 <Text className="text-white text-xl font-bold mb-4">Results</Text>
                 {searchResults.map((item) => (
                   <TouchableOpacity
                     key={item.id}
                     className="flex-row items-center mb-4 bg-[#1A1A1A] rounded-xl p-3"
+                    onPress={() => {
+                      if (item.type === 'video') {
+                        router.push(`/video-player?id=${item.id}`);
+                      } else {
+                        router.push(`/player?id=${item.id}`);
+                      }
+                    }}
                   >
-                    <Image
-                      source={{ uri: item.image }}
-                      className="w-14 h-14 rounded-lg"
-                      resizeMode="cover"
-                    />
+                    {item.thumbnail ? (
+                      <Image
+                        source={{ uri: item.thumbnail }}
+                        className="w-14 h-14 rounded-lg"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="w-14 h-14 rounded-lg bg-gray-700 items-center justify-center">
+                        <Text className="text-white text-xs">{item.type === 'video' ? '🎬' : '🎵'}</Text>
+                      </View>
+                    )}
                     <View className="flex-1 ml-3">
                       <Text className="text-white font-semibold">{item.title}</Text>
                       {item.artist && (
